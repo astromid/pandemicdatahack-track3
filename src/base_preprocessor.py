@@ -4,6 +4,7 @@ import pandas as pd
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import mean_squared_error
 from lightgbm import LGBMRegressor
+import category_encoders as ce
 from pathlib import Path
 SEED = 14300631
 N_FOLDS = 10
@@ -27,33 +28,51 @@ class BasePreprocessor:
         self.employements = self.preprocess_employements(self.raw_employements)
         self.worldskills = self.preprocess_worldskills(self.raw_worldskills)
 
-        self.drop_columns = [
-            # 'id',
-            'position',
-            'locality',
-            'locality_name',
-            'drive_licences',
-            'schedule',
-            'is_worldskills_participant',
-            'has_qualifications',
-            'creation_date',
-            'modification_date',
-            'publish_date',
+        self.train_cat = [
+            "region",
+            "industry",
+            "education_type",
+            "drive_licences",  #
+            "citizenship",
+            "schedule",
+            "employement_type",
+            "gender"
         ]
 
-        self.cat_columns = [
-            'region',
-            'industry',
-            'education_type',
-            'citizenship',
-            'employement_type',
-            'gender',
-            'relocation_ready',
-            'travel_ready',
-            'retraining_ready',
+        self.train_binary = [
+            "relocation_ready",
+            "travel_ready",
+            "retraining_ready",
+            "is_worldskills_participant",
+            "has_qualifications"
         ]
 
-    def fit(self):
+        self.train_text = [
+            "position",
+        ]
+
+        self.train_float = [
+            "age",
+            "experience",
+            "salary_desired",  #
+            "completeness_rate"
+        ]
+
+        self.train_idk = [
+            "locality",
+            "locality_name"
+        ]
+
+        self.train_dates = [
+            "creation_date",
+            "modification_date",
+            "publish_date"
+        ]
+
+    def fit(self, X, y):
+        pass
+
+    def transform(self, X):
         pass
 
     def transform_train(self):
@@ -61,10 +80,12 @@ class BasePreprocessor:
         # full_train = pd.merge(train, self.education, how='left', on='id')
         # full_train = pd.merge(full_train, self.employements, how='left', on='id')
         # full_train = pd.merge(full_train, self.worldskills, how='left', on='id')
-        full_train = full_train.drop(self.drop_columns, axis=1, errors='ignore')
-        full_train = full_train.drop(self.cat_columns, axis=1, errors='ignore')
+        # full_train = full_train.drop(self.drop_columns, axis=1, errors='ignore')
+        # full_train = full_train.drop(self.cat_columns, axis=1, errors='ignore')
         # full_train[self.cat_columns] = full_train[self.cat_columns].fillna("nan")
-        full_train = full_train.dropna()
+        # full_train = full_train.dropna()
+        cols = ["is_worldskills_participant", "has_qualifications"]
+        # full_train = full_train.drop(cols, axis=1, errors='ignore')
         return full_train
 
     def transform_test(self):
@@ -72,10 +93,12 @@ class BasePreprocessor:
         # full_test = pd.merge(test, self.education, how='left', on='id')
         # full_test = pd.merge(full_test, self.employements, how='left', on='id')
         # full_test = pd.merge(full_test, self.worldskills, how='left', on='id')
-        full_test = full_test.drop(self.drop_columns, axis=1, errors='ignore')
-        full_test = full_test.drop(self.cat_columns, axis=1, errors='ignore')
+        # full_test = full_test.drop(self.drop_columns, axis=1, errors='ignore')
+        # full_test = full_test.drop(self.cat_columns, axis=1, errors='ignore')
         # full_test[self.cat_columns] = full_test[self.cat_columns].fillna("nan")
-        full_test = full_test.dropna()
+        # full_test = full_test.dropna()
+        cols = ["is_worldskills_participant", "has_qualifications"]
+        # full_test = full_test.drop(cols, axis=1, errors='ignore')
         return full_test
 
     def filter_experience(self, x):
@@ -109,27 +132,43 @@ class BasePreprocessor:
 
         df['experience'] = df['experience'].apply(self.filter_experience)
         df['age'] = df['age'].apply(self.filter_age)
+        # date features
+        date_cols = ["creation_date", "modification_date", "publish_date"]
+        for col in date_cols:
+            df[col] = pd.to_datetime(df[col], format="%Y-%m-%d")
+        for col in date_cols:
+            df[f"{col}_day"] = df[col].dt.day
+            df[f"{col}_month"] = df[col].dt.month
+            df[f"{col}_year"] = df[col].dt.year
+
+        for i in range(len(date_cols)):
+            for j in range(i, len(date_cols)):
+                col1 = date_cols[i]
+                col2 = date_cols[j]
+                df[f"{col1}_minus_{col2}"] = (df[col1] - df[col2]).dt.days.abs()
+
+        df = df.drop("publish_date_year", axis=1)
         df = df.drop([
             'locality', 'position', 'locality_name', 'drive_licences',
-            'schedule', 'is_worldskills_participant', 'has_qualifications',
+            'schedule',
+            # 'is_worldskills_participant', 'has_qualifications',
             'creation_date', 'modification_date', 'publish_date',
         ], axis=1)
 
         if 'salary' in df.columns:
-            df = df[df['salary'] > 0]
+            # df = df[df['salary'] > 0]
             df['salary'] = np.log(df['salary'] + 1)
-
         df['salary_desired'] = np.log(df['salary_desired'] + 1)
 
-        df['region'] = df['region'].astype('category')
-        df['education_type'] = df['education_type'].astype('category')
-        df['industry'] = df['industry'].astype('category')
-        df['citizenship'] = df['citizenship'].astype('category')
-        df['employement_type'] = df['employement_type'].astype('category')
-        df['gender'] = df['gender'].astype('category')
-        df['relocation_ready'] = df['relocation_ready'].astype('boolean')
-        df['travel_ready'] = df['travel_ready'].astype('boolean')
-        df['retraining_ready'] = df['retraining_ready'].astype('boolean')
+        # df['region'] = df['region'].astype('category')
+        # df['education_type'] = df['education_type'].astype('category')
+        # df['industry'] = df['industry'].astype('category')
+        # df['citizenship'] = df['citizenship'].astype('category')
+        # df['employement_type'] = df['employement_type'].astype('category')
+        # df['gender'] = df['gender'].astype('category')
+        # df['relocation_ready'] = df['relocation_ready'].astype('boolean')
+        # df['travel_ready'] = df['travel_ready'].astype('boolean')
+        # df['retraining_ready'] = df['retraining_ready'].astype('boolean')
         return df
 
     def preprocess_education(self, df):
