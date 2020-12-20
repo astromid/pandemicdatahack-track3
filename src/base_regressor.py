@@ -4,7 +4,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import mean_squared_error
 from lightgbm import LGBMRegressor
 from .base_preprocessor import BasePreprocessor
-SEED = 14300631
+SEED = 1377
 N_FOLDS = 10
 
 random.seed(SEED)
@@ -35,6 +35,7 @@ class BaseRegressor:
         self.cv_metrics = []
 
         self.models = []
+        self.clf_models = []
         i = 0
         for train_indexes, val_indexes in skf.split(self.train, self.train['publish_year']):
             # print(f"Fold {i}")
@@ -47,10 +48,10 @@ class BaseRegressor:
             y_val = X_val['salary']
             X_val = X_val.drop(['id', 'salary'], axis=1)
 
-            model, val_metric = self.create_model_and_fit(X_train, y_train, X_val, y_val, hparams)
-
+            clf_model, model, val_metric = self.create_model_and_fit(X_train, y_train, X_val, y_val, hparams)
+            self.clf_models.append(clf_model)
             self.models.append(model)
-            # print(f"Val rmsle: {val_metric}")
+            print(f"Fold {i} val rmsle: {val_metric}")
             self.cv_metrics.append(val_metric)
 
     def val_info(self):

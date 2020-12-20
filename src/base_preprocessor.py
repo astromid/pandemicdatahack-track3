@@ -1,3 +1,4 @@
+import pickle
 import random
 import numpy as np
 import pandas as pd
@@ -6,27 +7,40 @@ from sklearn.metrics import mean_squared_error
 from lightgbm import LGBMRegressor
 import category_encoders as ce
 from pathlib import Path
-SEED = 14300631
+SEED = 1377
 N_FOLDS = 10
 
 random.seed(SEED)
 np.random.seed(SEED)
-
+import pickle
 
 class BasePreprocessor:
     def __init__(self, path_to_raw):
         self.raw_data_dir = Path(path_to_raw)
-        self.raw_train = pd.read_csv(self.raw_data_dir / 'train.csv', sep=';',
-                                parse_dates=['creation_date', 'modification_date', 'publish_date'])
-        self.raw_test = pd.read_csv(self.raw_data_dir / 'test.csv', sep=';',
-                               parse_dates=['creation_date', 'modification_date', 'publish_date'])
-        self.raw_education = pd.read_csv(self.raw_data_dir / 'education.csv', sep=';')
-        self.raw_employements = pd.read_csv(self.raw_data_dir / 'employements.csv', sep=';')
-        self.raw_worldskills = pd.read_csv(self.raw_data_dir / 'worldskills.csv', sep=';')
+        self.raw_train = pd.read_pickle(self.raw_data_dir / "train_covid_prices.pkl")
+        self.raw_train["publish_year"] = self.raw_train["publish_date"].dt.year
+        self.raw_train = self.raw_train.drop("publish_date", axis=1)
+        self.raw_test = pd.read_pickle(self.raw_data_dir / "test_covid_prices.pkl")
+        self.raw_test["publish_year"] = self.raw_test["publish_date"].dt.year
+        self.raw_test = self.raw_test.drop("publish_date", axis=1)
+        # embeds = pickle.load(open(self.raw_data_dir.parent / "employements_mult_new_ft_1.pkl", "rb"))
+        # self.train = pd.merge(train, self.education, how='left', on='id')
 
-        self.education = self.preprocess_education(self.raw_education)
-        self.employements = self.preprocess_employements(self.raw_employements)
-        self.worldskills = self.preprocess_worldskills(self.raw_worldskills)
+        # self.raw_train = pd.read_csv(self.raw_data_dir / 'train.csv', sep=';',
+        #                         parse_dates=['creation_date', 'modification_date', 'publish_date'])
+        # self.raw_test = pd.read_csv(self.raw_data_dir / 'test.csv', sep=';',
+        #                        parse_dates=['creation_date', 'modification_date', 'publish_date'])
+        # self.raw_education = pd.read_csv(self.raw_data_dir / 'education.csv', sep=';')
+        # self.raw_employements = pd.read_csv(self.raw_data_dir / 'employements.csv', sep=';')
+        # self.raw_worldskills = pd.read_csv(self.raw_data_dir / 'worldskills.csv', sep=';')
+        #
+        # self.education = self.preprocess_education(self.raw_education)
+        # self.employements = self.preprocess_employements(self.raw_employements)
+        # self.worldskills = self.preprocess_worldskills(self.raw_worldskills)
+        #
+        # self.prep_empls = pickle.load(open("../data/employements_mult_new_ft_1.pkl", "rb"))
+        # self.prep_empls = self.prep_empls.drop(["position", "employer", "achievements", "responsibilities",
+        #                       "start_date", "finish_date", "position_clean", "employer_clean"], axis=1)
 
         self.train_cat = [
             "region",
@@ -84,6 +98,7 @@ class BasePreprocessor:
         # full_train = full_train.drop(self.cat_columns, axis=1, errors='ignore')
         # full_train[self.cat_columns] = full_train[self.cat_columns].fillna("nan")
         # full_train = full_train.dropna()
+        full_train = pd.merge(full_train, self.prep_empls, how='left', on='id')
         cols = ["is_worldskills_participant", "has_qualifications"]
         # full_train = full_train.drop(cols, axis=1, errors='ignore')
         return full_train
@@ -99,6 +114,7 @@ class BasePreprocessor:
         # full_test = full_test.dropna()
         cols = ["is_worldskills_participant", "has_qualifications"]
         # full_test = full_test.drop(cols, axis=1, errors='ignore')
+        full_test = pd.merge(full_test, self.prep_empls, how='left', on='id')
         return full_test
 
     def filter_experience(self, x):
